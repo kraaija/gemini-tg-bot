@@ -4,7 +4,7 @@ const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 bot.start((ctx) => {
   ctx.reply(
-    "👋 Привет! Я на связи. Отправь тему, и я отправлю полноценный Rich-лонгрид со структурированными блоками и таблицами.",
+    "👋 Привет! Отправь тему, и я сгенерирую статью через структурированные блоки Rich Message.",
   );
 });
 
@@ -15,8 +15,8 @@ bot.on("text", async (ctx) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    const systemInstruction = `Ты профессиональный AI-автор. Пиши глубокие, структурированные лонгриды для Telegram. 
-Используй синтаксис Rich Markdown (заголовки, списки, таблицы и структурированные блоки). Пиши емко, аккуратно и без лишней воды.`;
+    // Промпт для генерации текста, который идеально парсится в блоки
+    const systemInstruction = `Ты профессиональный редактор. Напиши глубокую статью, используя структуру с заголовками, списками и таблицами для Rich Message.`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
@@ -32,12 +32,8 @@ bot.on("text", async (ctx) => {
     );
 
     const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error?.message || `HTTP error! status: ${response.status}`,
-      );
-    }
+    if (!response.ok)
+      throw new Error(data.error?.message || `HTTP error: ${response.status}`);
 
     const replyText =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "Пустой ответ.";
@@ -45,7 +41,7 @@ bot.on("text", async (ctx) => {
     const telegramToken = process.env.TELEGRAM_TOKEN;
     const chatId = ctx.chat.id;
 
-    // Отправляем через нативный метод sendRichMessage для поддержки расширенных блоков и таблиц
+    // Отправка через официальный метод sendRichMessage (Bot API 10.1+)
     const richRes = await fetch(
       `https://api.telegram.org/bot${telegramToken}/sendRichMessage`,
       {
@@ -60,11 +56,8 @@ bot.on("text", async (ctx) => {
       },
     );
 
-    const richData = await richRes.json();
-
-    // Запасной вариант на случай старой версии клиента у пользователя
     if (!richRes.ok) {
-      console.warn("sendRichMessage fallback:", richData);
+      // Если клиент или версия апи старые — откатываемся на обычный текст
       await ctx.reply(replyText, { parse_mode: "Markdown" });
     }
   } catch (error) {
