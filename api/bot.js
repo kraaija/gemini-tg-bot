@@ -11,37 +11,14 @@ bot.on("text", async (ctx) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    // Сначала получаем список доступных моделей для этого ключа
-    const modelsRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`,
-    );
-    const modelsData = await modelsRes.json();
-
-    if (!modelsRes.ok) {
-      throw new Error(
-        modelsData.error?.message || "Не удалось получить список моделей",
-      );
-    }
-
-    // Ищем модель, которая поддерживает генерацию текста
-    const validModel = modelsData.models?.find((m) =>
-      m.supportedGenerationMethods?.includes("generateContent"),
-    );
-
-    if (!validModel) {
-      throw new Error(
-        "У твоего ключа нет доступных моделей для генерации текста.",
-      );
-    }
-
-    // Используем найденное имя модели
-    const modelName = validModel.name; // обычно возвращает что-то вроде "models/gemini-1.5-flash"
-
+    // Используем актуальную модель, которую требует API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/${modelName}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
         }),
