@@ -10,11 +10,27 @@ bot.start((ctx) => {
 
 bot.on("text", async (ctx) => {
   try {
+    const prompt = ctx.message.text.trim();
+
+    // Если ты написал просто «ок», «да», «спс» и т.д., не дергаем модель для создания статьи
+    const stopWords = [
+      "ок",
+      "окей",
+      "да",
+      "угу",
+      "ага",
+      "спасибо",
+      "спс",
+      "понял",
+    ];
+    if (prompt.length < 4 || stopWords.includes(prompt.toLowerCase())) {
+      await ctx.reply("👍 Принято! Жду новую тему или задачу.");
+      return;
+    }
+
     await ctx.sendChatAction("typing");
 
     const apiKey = process.env.GEMINI_API_KEY;
-    const prompt = ctx.message.text;
-
     const currentDate = new Date().toLocaleDateString("ru-RU", {
       timeZone: "Europe/Moscow",
       day: "numeric",
