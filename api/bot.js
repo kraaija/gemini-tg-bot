@@ -15,7 +15,14 @@ bot.on("text", async (ctx) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    const systemInstruction = `Ты профессиональный AI-автор. Пиши глубокие статьи, используя заголовки, списки и таблицы (Markdown), которые преобразуются в нативные блоки.`;
+    const currentDate = new Date().toLocaleDateString("ru-RU", {
+      timeZone: "Europe/Moscow",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+    const systemInstruction = `Ты профессиональный AI-автор и преподаватель. Текущая дата: ${currentDate}. Пользователь находится в Казани. Никогда не путай месяцы и время. Пиши глубокие статьи, используя заголовки, списки и таблицы (Markdown), которые преобразуются в нативные блоки. Если нужно объяснить математику или точные науки, делай это понятно и пошагово.`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
@@ -40,7 +47,6 @@ bot.on("text", async (ctx) => {
     const telegramToken = process.env.TELEGRAM_TOKEN;
     const chatId = ctx.chat.id;
 
-    // Корректный официальный формат запроса для sendRichMessage (Bot API 10.1+)
     const richRes = await fetch(
       `https://api.telegram.org/bot${telegramToken}/sendRichMessage`,
       {
@@ -49,7 +55,7 @@ bot.on("text", async (ctx) => {
         body: JSON.stringify({
           chat_id: chatId,
           rich_message: {
-            markdown: replyText, // Исправлено: правильный ключ передачи markdown для rich-блоков
+            markdown: replyText,
           },
         }),
       },
@@ -57,7 +63,6 @@ bot.on("text", async (ctx) => {
 
     const richData = await richRes.json();
 
-    // Если метод не прошел, делаем фолбек на стандартный текст, чтобы бот не падал
     if (!richRes.ok) {
       console.warn("Rich Message API fallback:", richData);
       await ctx.reply(replyText, { parse_mode: "Markdown" });
