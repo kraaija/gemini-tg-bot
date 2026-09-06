@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-bot.start((ctx) => ctx.reply("Привет! Я переехал на Vercel. Жду твоих идей!"));
+bot.start((ctx) => ctx.reply("Привет! Я на связи."));
 
 bot.on("text", async (ctx) => {
   try {
@@ -14,11 +14,11 @@ bot.on("text", async (ctx) => {
     await ctx.reply(result.response.text());
   } catch (error) {
     console.error(error);
-    await ctx.reply("Ошибка сервера или нейросети.");
+    await ctx.reply("Ошибка нейросети.");
   }
 });
 
-export default async function handle(req, res) {
+export default async function handler(req, res) {
   try {
     await bot.handleUpdate(req.body);
     return res.status(200).send("OK");
