@@ -9,11 +9,12 @@ bot.start((ctx) => ctx.reply("Привет! Я на связи."));
 bot.on("text", async (ctx) => {
   try {
     await ctx.sendChatAction("typing");
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(ctx.message.text);
-    await ctx.reply(result.response.text());
+    const responseText = result.response.text();
+    await ctx.reply(responseText);
   } catch (error) {
-    console.error(error);
+    console.error("Gemini Error:", error);
     await ctx.reply("Ошибка нейросети.");
   }
 });
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
     await bot.handleUpdate(req.body);
     return res.status(200).send("OK");
   } catch (e) {
-    console.error(e);
+    console.error("Handler Error:", e);
     return res.status(500).send("Error");
   }
 }
