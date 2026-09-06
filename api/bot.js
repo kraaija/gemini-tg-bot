@@ -9,12 +9,15 @@ bot.start((ctx) => ctx.reply("Привет! Я на связи."));
 bot.on("text", async (ctx) => {
   try {
     await ctx.sendChatAction("typing");
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-1.5-flash" },
+      { apiVersion: "v1" },
+    );
     const result = await model.generateContent(ctx.message.text);
     const responseText = result.response.text();
     await ctx.reply(responseText);
   } catch (error) {
-    console.error("Gemini Error:", error);
+    console.error("Gemini Error Detail:", error);
     await ctx.reply("Ошибка нейросети.");
   }
 });
