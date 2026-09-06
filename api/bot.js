@@ -2,7 +2,12 @@ import { Telegraf } from "telegraf";
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
-bot.start((ctx) => ctx.reply("Привет! Я на связи."));
+bot.start((ctx) => {
+  ctx.reply(
+    "👋 <b>Привет! Я на связи.</b>\n\nЯ готов делать крутые посты с форматированием (Rich Text). Напиши тему, и я оформлю текст красиво.",
+    { parse_mode: "HTML" },
+  );
+});
 
 bot.on("text", async (ctx) => {
   try {
@@ -11,16 +16,19 @@ bot.on("text", async (ctx) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    // Используем актуальную модель, которую требует API
+    // Инструкция для генерации текста с использованием HTML-тегов Телеграма
+    const systemInstruction =
+      "Ты профессиональный контент-мейкер. Оформляй ответ красиво, используя HTML-теги Telegram: <b>жирный</b>, <i>курсив</i>, <code>моноширинный</code>, <s>зачеркнутый</s>, <tg-spoiler>спойлер</tg-spoiler>, а также блоки кода или цитаты. Пиши аккуратно и структурированно.";
+
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [
+            { parts: [{ text: `${systemInstruction}\n\nЗапрос: ${prompt}` }] },
+          ],
         }),
       },
     );
@@ -35,10 +43,14 @@ bot.on("text", async (ctx) => {
 
     const replyText =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "Пустой ответ.";
-    await ctx.reply(replyText);
+
+    // Отправляем с поддержкой HTML-разметки
+    await ctx.reply(replyText, { parse_mode: "HTML" });
   } catch (error) {
     console.error("API Error:", error);
-    await ctx.reply(`Ошибка: ${error.message}`);
+    await ctx.reply(`❌ <b>Ошибка:</b> <code>${error.message}</code>`, {
+      parse_mode: "HTML",
+    });
   }
 });
 
