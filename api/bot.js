@@ -2,25 +2,79 @@ import { Telegraf } from "telegraf";
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
+// Функция запроса с автоповторами при перегрузке (retries)
+async function fetchGeminiWithRetry(apiKey, body, maxRetries = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return data;
+      }
+
+      const errMsg = data.error?.message || `HTTP error: ${response.status}`;
+
+      // Если модель перегружена (high demand / 503), делаем паузу и пробуем снова
+      if (
+        response.status === 503 ||
+        errMsg.includes("high demand") ||
+        errMsg.includes("overloaded")
+      ) {
+        lastError = new Error(errMsg);
+        if (attempt < maxRetries) {
+          await new Promise((res) => setTimeout(res, 2000 * attempt));
+          continue;
+        }
+      }
+
+      if (response.status === 429) {
+        throw new Error(
+          "Превышен лимит запросов (20 в минуту). Подожди полминуты перед новым запросом.",
+        );
+      }
+
+      throw new Error(errMsg);
+    } catch (err) {
+      lastError = err;
+      if (
+        attempt < maxRetries &&
+        (err.message.includes("high demand") ||
+          err.message.includes("overloaded"))
+      ) {
+        await new Promise((res) => setTimeout(res, 2000 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 bot.start((ctx) => {
   ctx.reply(
     "👋 Привет! Отправь тему или фото, и я сгенерирую ответ через нативные Rich Blocks.",
   );
 });
 
-// Заменили bot.on("text") на "message", чтобы ловить и текст, и фотки
 bot.on("message", async (ctx) => {
-  // Игнорируем всё кроме текста и фото (чтобы не падал на стикерах/опросах)
   if (!ctx.message.text && !ctx.message.photo && !ctx.message.caption) return;
 
-  // Чтобы не завис интервал на Vercel
   let typingInterval;
 
   try {
     const prompt = (ctx.message.text || ctx.message.caption || "").trim();
     const hasPhoto = !!ctx.message.photo;
 
-    // ЖЕСТКИЙ ФИЛЬТР: работает только если нет фото и текст короткий
     const stopWords = [
       "ок",
       "окей",
@@ -41,16 +95,14 @@ bot.on("message", async (ctx) => {
       return;
     }
 
-    // 1. Постоянный индикатор "Печатает..." (как класс Typing в codex_bridge)
     await ctx.sendChatAction("typing").catch(() => {});
     typingInterval = setInterval(() => {
       ctx.sendChatAction("typing").catch(() => {});
     }, 4000);
 
-    // 2. Скачивание фото (берем самый большой размер, как в incoming_attachment)
     let imagePart = null;
     if (hasPhoto) {
-      const photo = ctx.message.photo.pop(); // Последний элемент — самое высокое качество
+      const photo = ctx.message.photo.pop();
       const fileLink = await ctx.telegram.getFileLink(photo.file_id);
       const imageResp = await fetch(fileLink.href);
       const arrayBuffer = await imageResp.arrayBuffer();
@@ -70,7 +122,6 @@ bot.on("message", async (ctx) => {
       year: "numeric",
     });
 
-    // 3. Усиленный промпт со спизженными правилами математики и форматирования
     const systemInstruction = `Ты профессиональный AI-автор и преподаватель. Текущая дата: ${currentDate}. Пользователь находится в Казани. 
 Никогда не путай месяцы и время. Пиши глубокие статьи, используя заголовки, списки и таблицы (Markdown), которые преобразуются в нативные блоки. 
 ВАЖНО ПО ФОРМАТИРОВАНИЮ:
@@ -79,7 +130,6 @@ bot.on("message", async (ctx) => {
 - Не помещай формулы с модулем в таблицы — выноси их отдельным блоком.
 - Если приложено фото, внимательно изучи его и дай подробный ответ.`;
 
-    // Собираем части запроса (текст + картинка, если есть)
     const parts = [
       {
         text: `${systemInstruction}\n\nЗапрос: ${prompt || "Опиши, что на фото, и реши задачу, если она там есть."}`,
@@ -87,24 +137,12 @@ bot.on("message", async (ctx) => {
     ];
     if (imagePart) parts.push(imagePart);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts }] }),
-      },
+    // Вызываем Gemini через функцию с автоповторами
+    const data = await fetchGeminiWithRetry(
+      apiKey,
+      { contents: [{ parts }] },
+      3,
     );
-
-    const data = await response.json();
-    if (!response.ok) {
-      if (response.status === 429) {
-        throw new Error(
-          "Превышен лимит запросов (20 в минуту). Подожди полминуты перед новым запросом.",
-        );
-      }
-      throw new Error(data.error?.message || `HTTP error: ${response.status}`);
-    }
 
     const replyText =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "(пустой ответ)";
@@ -112,7 +150,6 @@ bot.on("message", async (ctx) => {
     const chatId = ctx.chat.id;
     const messageId = ctx.message.message_id;
 
-    // 4. Отправка Rich Message с reply_parameters (чтобы ответ цеплялся к твоему сообщению)
     const richRes = await fetch(
       `https://api.telegram.org/bot${telegramToken}/sendRichMessage`,
       {
@@ -120,7 +157,7 @@ bot.on("message", async (ctx) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
-          reply_parameters: { message_id: messageId }, // Ответ веткой (Reply)
+          reply_parameters: { message_id: messageId },
           rich_message: { markdown: replyText },
         }),
       },
@@ -128,7 +165,6 @@ bot.on("message", async (ctx) => {
 
     const richData = await richRes.json();
 
-    // 5. Умный фолбек (как send_html): если Rich упал, режем лонгрид по 4000 символов, чтобы не было ошибки длины
     if (!richRes.ok) {
       console.warn("Rich Message API fallback:", richData);
       const chunkSize = 4000;
@@ -139,12 +175,21 @@ bot.on("message", async (ctx) => {
             parse_mode: "Markdown",
             reply_parameters: i === 0 ? { message_id: messageId } : undefined,
           })
-          .catch(() => ctx.reply(chunk)); // Если Markdown сломан, шлем сырой текст
+          .catch(() => ctx.reply(chunk));
       }
     }
   } catch (error) {
     console.error("API Error:", error);
-    await ctx.reply(`❌ Ошибка: ${error.message}`);
+    if (
+      error.message.includes("high demand") ||
+      error.message.includes("overloaded")
+    ) {
+      await ctx.reply(
+        "⚠️ Серверы Gemini сейчас сильно перегружены. Попробуй повторить через полминуты.",
+      );
+    } else {
+      await ctx.reply(`❌ Ошибка: ${error.message}`);
+    }
   } finally {
     if (typingInterval) clearInterval(typingInterval);
   }
