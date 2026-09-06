@@ -1,9 +1,8 @@
 import { Telegraf } from "telegraf";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Инициализируем бота и нейросеть
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN!);
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 bot.start((ctx) => ctx.reply("Привет! Я переехал на Vercel. Жду твоих идей!"));
 
@@ -19,10 +18,8 @@ bot.on("text", async (ctx) => {
   }
 });
 
-// Экспортируем функцию для Vercel
-export default async function handle(req: any, res: any) {
+export default async function handle(req, res) {
   try {
-    // Передаем данные от Telegram в Telegraf
     await bot.handleUpdate(req.body);
     return res.status(200).send("OK");
   } catch (e) {
