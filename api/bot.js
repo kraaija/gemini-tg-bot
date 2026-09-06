@@ -8,19 +8,20 @@ bot.on("text", async (ctx) => {
   try {
     await ctx.sendChatAction("typing");
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const token = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    // Прямой запрос через REST API Google (хавает любые типы ключей)
+    // Запрос через Vertex AI REST API с Bearer-авторизацией для AQ-токенов
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://us-central1-aiplatform.googleapis.com/v1/projects/gemini-bot-project/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
         }),
       },
     );
@@ -28,6 +29,7 @@ bot.on("text", async (ctx) => {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Vertex API Error Details:", JSON.stringify(data));
       throw new Error(
         data.error?.message || `HTTP error! status: ${response.status}`,
       );
@@ -38,7 +40,7 @@ bot.on("text", async (ctx) => {
       "Пустой ответ от нейросети.";
     await ctx.reply(replyText);
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("Fetch Error:", error);
     await ctx.reply("Ошибка нейросети.");
   }
 });
