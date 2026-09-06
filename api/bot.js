@@ -2,11 +2,11 @@ import { Telegraf } from "telegraf";
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
-bot.start((ctx) =>
+bot.start((ctx) => {
   ctx.reply(
-    "Привет! Отправь задачу или текст, и я оформлю его как Rich Message.",
-  ),
-);
+    "👋 Привет! Я на связи. Отправь тему, и я отправлю полноценный Rich-лонгрид со структурированными блоками и таблицами.",
+  );
+});
 
 bot.on("text", async (ctx) => {
   try {
@@ -15,10 +15,9 @@ bot.on("text", async (ctx) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const prompt = ctx.message.text;
 
-    const systemInstruction = `Ты помощник, который формирует ответы в формате Rich Message для Telegram. 
-Используй продвинутую разметку или структурируй текст с заголовками, таблицами и списками, поддерживаемыми в новых блок-структурах Telegram.`;
+    const systemInstruction = `Ты профессиональный AI-автор. Пиши глубокие, структурированные лонгриды для Telegram. 
+Используй синтаксис Rich Markdown (заголовки, списки, таблицы и структурированные блоки). Пиши емко, аккуратно и без лишней воды.`;
 
-    // Запрос к Gemini
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
       {
@@ -26,25 +25,27 @@ bot.on("text", async (ctx) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
-            { parts: [{ text: `${systemInstruction}\n\nЗапрос: ${prompt}` }] },
+            { parts: [{ text: `${systemInstruction}\n\nТема: ${prompt}` }] },
           ],
         }),
       },
     );
 
     const data = await response.json();
-    if (!response.ok)
+
+    if (!response.ok) {
       throw new Error(
         data.error?.message || `HTTP error! status: ${response.status}`,
       );
+    }
 
     const replyText =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "Пустой ответ.";
 
-    // Отправка через нативный метод sendRichMessage Bot API
     const telegramToken = process.env.TELEGRAM_TOKEN;
     const chatId = ctx.chat.id;
 
+    // Отправляем через нативный метод sendRichMessage для поддержки расширенных блоков и таблиц
     const richRes = await fetch(
       `https://api.telegram.org/bot${telegramToken}/sendRichMessage`,
       {
@@ -52,18 +53,19 @@ bot.on("text", async (ctx) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
-          // Передаем текст в формате Rich Markdown / HTML, который обрабатывается нативными блоками
-          rich_markdown: replyText,
+          rich_message: {
+            rich_markdown: replyText,
+          },
         }),
       },
     );
 
     const richData = await richRes.json();
 
-    // Если метод вдруг не поддерживается старой версией библиотеки или провайдера, падаем на обычный send
+    // Запасной вариант на случай старой версии клиента у пользователя
     if (!richRes.ok) {
       console.warn("sendRichMessage fallback:", richData);
-      await ctx.reply(replyText, { parse_mode: "HTML" });
+      await ctx.reply(replyText, { parse_mode: "Markdown" });
     }
   } catch (error) {
     console.error("API Error:", error);
