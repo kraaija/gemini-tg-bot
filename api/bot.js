@@ -9,7 +9,7 @@ bot.start((ctx) => ctx.reply("Привет! Я на связи."));
 bot.on("text", async (ctx) => {
   try {
     await ctx.sendChatAction("typing");
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const result = await model.generateContent(ctx.message.text);
     await ctx.reply(result.response.text());
   } catch (error) {
